@@ -1,40 +1,60 @@
 # VintageStory-XRay
 
-Client-side X-Ray mod for Vintage Story 1.22.3.
+Client-side X-Ray rendering project for **Vintage Story 1.22.3**.
 
-> Status: development scaffold. The renderer integration is intentionally isolated until it is verified against the exact 1.22.3 client assemblies.
+## Current state
 
-## Planned features
+The repository now contains the .NET 10 project, client-only mod metadata, configuration system, hotkey handling and an isolated Harmony renderer bridge.
 
-- client-side toggle
-- configurable transparent/hidden blocks
-- ore whitelist
+**Important:** the renderer bridge is not yet the final X-Ray implementation. It deliberately does not pretend that a private 1.22.3 engine method has been verified. The remaining work is to bind the bridge to the exact 1.22.3 chunk-mesh/shader path and implement target-block preservation.
+
+## Planned X-Ray modes
+
+- transparent terrain
+- hidden terrain
+- ore/target whitelist
+- target highlighting
+- cave/air-space view
 - configurable render distance
-- ore highlighting / ESP
-- optional cave/air-space highlighting
+- hotkey toggle
 - JSON configuration
-- in-game status indicator
 
 ## Compatibility
 
-Target: Vintage Story 1.22.3
+- Vintage Story: 1.22.3
+- .NET: 10
+- side: client
+- server installation: not required
 
-Target runtime: .NET 10
+Vintage Story's 1.22 development line migrated the source projects from .NET 8 to .NET 10. The public API exposes client rendering through `ICoreClientAPI.Render` and renderer registration through `IClientEventAPI.RegisterRenderer`; the deeper chunk renderer remains an engine implementation detail. See the official API source and API update notes.
 
-Server installation is not intended.
+## Build
 
-## Development
+Set `VINTAGE_STORY` to the directory containing the game's DLLs, then run:
 
-The project is structured so that the X-Ray policy/configuration is separated from the renderer hook. This makes it possible to update the rendering implementation when the exact 1.22.3 API/assemblies are available.
+```bash
+dotnet build -c Release
+```
 
-## Installation
+The project expects:
 
-Development build only. Copy the resulting client-side mod archive to the Vintage Story `Mods` directory.
+- `VintagestoryAPI.dll`
+- `VintagestoryLib.dll`
+- `Lib/0Harmony.dll`
 
 ## Configuration
 
-Configuration will be stored as JSON and will expose the X-Ray toggle, block filters, highlight settings and distance limits.
+The mod creates `ModConfig/vsxray.json` on first client load. It contains opacity, maximum distance, highlighting and target block filters.
+
+## Architecture
+
+`XRayModSystem` is client-only and owns the toggle. `XRayConfig` owns persistent settings. `XRayRendererController` isolates the private renderer interception so it can be updated independently when the exact 1.22.3 render path is verified.
+
+## References
+
+- Vintage Story API: https://github.com/anegostudios/vsapi
+- Vintage Story mod examples: https://github.com/anegostudios/vsmodexamples
 
 ## Disclaimer
 
-Use only where permitted by the server/operator. This project is client-side rendering research for Vintage Story.
+Use only where permitted by the server/operator. This project changes client rendering and does not modify server world state.
