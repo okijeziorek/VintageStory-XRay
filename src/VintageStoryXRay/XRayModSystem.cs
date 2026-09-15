@@ -1,19 +1,18 @@
+using System.Text.Json;
 using HarmonyLib;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Input;
+using Vintagestory.API.Datastructures;
 
 namespace VintageStoryXRay;
 
 public sealed class XRayModSystem : ModSystem
 {
     private Harmony? harmony;
-    private ICoreClientAPI? capi;
 
     public override void StartClientSide(ICoreClientAPI api)
     {
-        capi = api;
-
         XRayConfig config;
         try
         {
@@ -42,7 +41,15 @@ public sealed class XRayModSystem : ModSystem
         harmony = new Harmony("okijeziorek.vintagestoryxray");
         XRayMeshPatch.Apply(harmony);
 
-        api.StoreModConfig(new Vintagestory.API.Datastructures.JsonObject(config), "vsxray.json");
+        try
+        {
+            string json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
+            api.StoreModConfig(JsonObject.FromJson(json), "vsxray.json");
+        }
+        catch
+        {
+            // A missing optional config file must not prevent the mod from loading.
+        }
     }
 
     public override void Dispose()
@@ -54,7 +61,6 @@ public sealed class XRayModSystem : ModSystem
         }
 
         XRayRuntime.State = null;
-        capi = null;
         base.Dispose();
     }
 }
