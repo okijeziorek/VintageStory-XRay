@@ -13,7 +13,18 @@ public sealed class XRayModSystem : ModSystem
     public override void StartClientSide(ICoreClientAPI api)
     {
         capi = api;
-        XRayRuntime.State = new XRayState(XRayConfig.Default());
+
+        XRayConfig config;
+        try
+        {
+            config = api.LoadModConfig<XRayConfig>("vsxray.json") ?? XRayConfig.Default();
+        }
+        catch
+        {
+            config = XRayConfig.Default();
+        }
+
+        XRayRuntime.State = new XRayState(config);
 
         api.Input.RegisterHotKey(
             "vintagestoryxray.toggle",
@@ -30,6 +41,8 @@ public sealed class XRayModSystem : ModSystem
 
         harmony = new Harmony("okijeziorek.vintagestoryxray");
         XRayMeshPatch.Apply(harmony);
+
+        api.StoreModConfig(new Vintagestory.API.Datastructures.JsonObject(config), "vsxray.json");
     }
 
     public override void Dispose()
