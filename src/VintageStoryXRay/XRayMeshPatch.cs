@@ -22,6 +22,7 @@ internal static class XRayMeshPatch
         try
         {
             int patched = 0;
+            var seen = new HashSet<MethodInfo>();
 
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
@@ -36,7 +37,7 @@ internal static class XRayMeshPatch
 
                         foreach (var method in type.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
                         {
-                            if (method.Name != "AddMeshData") continue;
+                            if (method.Name != "AddMeshData" || !seen.Add(method)) continue;
 
                             var parameters = method.GetParameters();
                             if (parameters.Length == 0 || parameters[0].ParameterType != typeof(MeshData)) continue;
@@ -82,7 +83,7 @@ internal static class XRayMeshPatch
         }
         catch (ReflectionTypeLoadException ex)
         {
-            return ex.Types.Where(type => type != null)!;
+            return ex.Types.Where(type => type != null).Select(type => type!);
         }
         catch
         {
