@@ -9,12 +9,11 @@ public sealed class XRayModSystem : ModSystem
 {
     private Harmony? harmony;
     private ICoreClientAPI? capi;
-    private XRayState? state;
 
     public override void StartClientSide(ICoreClientAPI api)
     {
         capi = api;
-        state = new XRayState(XRayConfig.Default());
+        XRayRuntime.State = new XRayState(XRayConfig.Default());
 
         api.Input.RegisterHotKey(
             "vintagestoryxray.toggle",
@@ -25,7 +24,7 @@ public sealed class XRayModSystem : ModSystem
 
         api.Input.SetHotKeyHandler("vintagestoryxray.toggle", _ =>
         {
-            state.Toggle(api);
+            XRayRuntime.State!.Toggle(api);
             return true;
         });
 
@@ -41,10 +40,8 @@ public sealed class XRayModSystem : ModSystem
             harmony = null;
         }
 
+        XRayRuntime.State = null;
         capi = null;
-        state = null;
         base.Dispose();
     }
-
-    internal static XRayState? CurrentState { get; private set; }
 }
