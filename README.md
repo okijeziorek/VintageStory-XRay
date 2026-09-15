@@ -4,29 +4,40 @@ Client-side X-Ray rendering project for **Vintage Story 1.22.3**.
 
 ## Current state
 
-The repository now contains the .NET 10 project, client-only mod metadata, configuration system, hotkey handling and an isolated Harmony renderer bridge.
+The repository contains a .NET 10 client-only mod, persistent configuration, an F8 toggle and an experimental Harmony patch around `MeshData.AddMeshData(...)`.
 
-**Important:** the renderer bridge is not yet the final X-Ray implementation. It deliberately does not pretend that a private 1.22.3 engine method has been verified. The remaining work is to bind the bridge to the exact 1.22.3 chunk-mesh/shader path and implement target-block preservation.
+The current prototype changes terrain mesh alpha and routes the intercepted terrain mesh data toward the transparent chunk render pass. This is the first real rendering implementation, but it is **not yet verified against a locally executed 1.22.3 client**.
 
-## Planned X-Ray modes
+The patch is deliberately restricted to call stacks containing `TerrainChunkTesselator` or `ChunkTesselator` so inventory/item meshes are not blindly made transparent.
 
-- transparent terrain
-- hidden terrain
-- ore/target whitelist
-- target highlighting
-- cave/air-space view
-- configurable render distance
-- hotkey toggle
-- JSON configuration
+## What works in the prototype
+
+- client-only mod loading
+- F8 X-Ray toggle
+- persistent `ModConfig/vsxray.json`
+- configurable wall alpha
+- configurable redraw range
+- chunk redraw on toggle
+- experimental transparent terrain rendering path
+
+## Still to implement
+
+- true target/ore whitelist at block-tessellation level
+- opaque ore ESP / outlines
+- hidden terrain mode
+- cave/air-space detection
+- mob/entity visibility modes
+- performance-optimized chunk invalidation
+- automated 1.22.3 integration test
 
 ## Compatibility
 
-- Vintage Story: 1.22.3
-- .NET: 10
-- side: client
-- server installation: not required
+- Vintage Story: **1.22.3**
+- .NET: **10**
+- side: **Client**
+- server installation: **not required**
 
-Vintage Story's 1.22 development line migrated the source projects from .NET 8 to .NET 10. The public API exposes client rendering through `ICoreClientAPI.Render` and renderer registration through `IClientEventAPI.RegisterRenderer`; the deeper chunk renderer remains an engine implementation detail. See the official API source and API update notes.
+Vintage Story 1.22 uses .NET 10. The public API exposes client rendering through `ICoreClientAPI.Render` and renderer registration through `IClientEventAPI.RegisterRenderer`; this project additionally uses Harmony because the desired X-Ray effect needs to affect terrain mesh data before it reaches the engine's normal chunk render pools.
 
 ## Build
 
@@ -42,18 +53,53 @@ The project expects:
 - `VintagestoryLib.dll`
 - `Lib/0Harmony.dll`
 
+The game DLLs are intentionally **not** stored in this repository.
+
 ## Configuration
 
-The mod creates `ModConfig/vsxray.json` on first client load. It contains opacity, maximum distance, highlighting and target block filters.
+The mod uses the normal Vintage Story mod configuration API and creates:
+
+`ModConfig/vsxray.json`
+
+Current fields include:
+
+- `Enabled`
+- `WallAlpha`
+- `Range`
+- `IncludeTerrain`
+- `IncludeTransparentBlocks`
+- `ShowHud`
 
 ## Architecture
 
-`XRayModSystem` is client-only and owns the toggle. `XRayConfig` owns persistent settings. `XRayRendererController` isolates the private renderer interception so it can be updated independently when the exact 1.22.3 render path is verified.
+```text
+XRayModSystem
+    |
+    +-- XRayConfig / XRayState
+    |
+    +-- F8 input handler
+    |
+    +-- Harmony
+           |
+           +-- MeshData.AddMeshData
+                    |
+                    +-- terrain call-stack filter
+                    +-- alpha rewrite
+                    +-- Transparent render-pass rewrite
+```
+
+The original `Rgba` and `RenderPassesAndExtraBits` buffers are cloned before modification and restored after the patched call returns. This prevents the temporary X-Ray transformation from permanently corrupting the source `MeshData` object.
+
+## Why the ore whitelist is a separate stage
+
+A terrain chunk mesh contains already-combined geometry. At `MeshData.AddMeshData(...)` level, individual faces are not reliably represented as high-level `Block` objects. Therefore a robust ore-only mode needs to intercept the terrain tessellation stage earlier, where the block position and block ID are still known.
+
+That is the next renderer stage rather than something that should be faked with a texture-name test.
 
 ## References
 
-- Vintage Story API: https://github.com/anegostudios/vsapi
-- Vintage Story mod examples: https://github.com/anegostudios/vsmodexamples
+- [Vintage Story API](https://github.com/anegostudios/vsapi)
+- [Vintage Story mod examples](https://github.com/anegostudios/vsmodexamples)
 
 ## Disclaimer
 
