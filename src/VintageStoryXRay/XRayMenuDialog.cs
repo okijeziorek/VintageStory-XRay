@@ -10,7 +10,14 @@ public sealed class XRayMenuDialog : GuiDialog
     public XRayMenuDialog(ICoreClientAPI capi) : base(capi)
     {
         this.capi = capi;
-        Compose();
+        try
+        {
+            Compose();
+        }
+        catch (Exception ex)
+        {
+            XRaySafety.Report(capi, ex, "Could not compose X-Ray menu");
+        }
     }
 
     public override string ToggleKeyCombinationCode => "vintagestoryxray.menu";
@@ -63,81 +70,137 @@ public sealed class XRayMenuDialog : GuiDialog
 
     private void RefreshControls()
     {
-        var state = XRayRuntime.State;
-        if (state == null || SingleComposer == null) return;
+        try
+        {
+            var state = XRayRuntime.State;
+            if (state == null || SingleComposer == null) return;
 
-        var cfg = state.Config;
-        SingleComposer.GetSwitch("xray-enabled")?.SetValue(cfg.Enabled);
-        SingleComposer.GetSlider("xray-alpha")?.SetValues(cfg.WallAlpha, 0, 100, 1);
-        SingleComposer.GetSlider("xray-range")?.SetValues(cfg.Range, 16, 256, 16);
-        SingleComposer.GetSwitch("xray-terrain")?.SetValue(cfg.IncludeTerrain);
-        SingleComposer.GetSwitch("xray-transparent")?.SetValue(cfg.IncludeTransparentBlocks);
-        SingleComposer.GetSwitch("xray-hud")?.SetValue(cfg.ShowHud);
+            var cfg = state.Config;
+            SingleComposer.GetSwitch("xray-enabled")?.SetValue(cfg.Enabled);
+            SingleComposer.GetSlider("xray-alpha")?.SetValues(cfg.WallAlpha, 0, 100, 1);
+            SingleComposer.GetSlider("xray-range")?.SetValues(cfg.Range, 16, 256, 16);
+            SingleComposer.GetSwitch("xray-terrain")?.SetValue(cfg.IncludeTerrain);
+            SingleComposer.GetSwitch("xray-transparent")?.SetValue(cfg.IncludeTransparentBlocks);
+            SingleComposer.GetSwitch("xray-hud")?.SetValue(cfg.ShowHud);
+        }
+        catch (Exception ex)
+        {
+            XRaySafety.Report(capi, ex, "Could not refresh X-Ray menu controls");
+        }
     }
 
     private bool OnEnabledChanged(bool value)
     {
-        if (XRayRuntime.State != null) XRayRuntime.State.Config.Enabled = value;
-        SaveConfig();
-        XRayMeshPatch.Invalidate(capi);
+        try
+        {
+            if (XRayRuntime.State != null) XRayRuntime.State.Config.Enabled = value;
+            SaveConfig();
+            XRayMeshPatch.Invalidate(capi);
+        }
+        catch (Exception ex)
+        {
+            XRaySafety.DisableAfterFailure(capi, ex, "Could not apply X-Ray enabled setting");
+        }
         return true;
     }
 
     private bool OnAlphaChanged(int value)
     {
-        if (XRayRuntime.State != null) XRayRuntime.State.Config.WallAlpha = (byte)Math.Clamp(value, 0, 100);
-        SaveConfig();
-        XRayMeshPatch.Invalidate(capi);
+        try
+        {
+            if (XRayRuntime.State != null) XRayRuntime.State.Config.WallAlpha = (byte)Math.Clamp(value, 0, 100);
+            SaveConfig();
+            XRayMeshPatch.Invalidate(capi);
+        }
+        catch (Exception ex)
+        {
+            XRaySafety.DisableAfterFailure(capi, ex, "Could not apply wall transparency setting");
+        }
         return true;
     }
 
     private bool OnRangeChanged(int value)
     {
-        if (XRayRuntime.State != null) XRayRuntime.State.Config.Range = Math.Clamp(value, 16, 256);
-        SaveConfig();
-        XRayMeshPatch.Invalidate(capi);
+        try
+        {
+            if (XRayRuntime.State != null) XRayRuntime.State.Config.Range = Math.Clamp(value, 16, 256);
+            SaveConfig();
+            XRayMeshPatch.Invalidate(capi);
+        }
+        catch (Exception ex)
+        {
+            XRaySafety.DisableAfterFailure(capi, ex, "Could not apply X-Ray range setting");
+        }
         return true;
     }
 
     private bool OnTerrainChanged(bool value)
     {
-        if (XRayRuntime.State != null) XRayRuntime.State.Config.IncludeTerrain = value;
-        SaveConfig();
-        XRayMeshPatch.Invalidate(capi);
+        try
+        {
+            if (XRayRuntime.State != null) XRayRuntime.State.Config.IncludeTerrain = value;
+            SaveConfig();
+            XRayMeshPatch.Invalidate(capi);
+        }
+        catch (Exception ex)
+        {
+            XRaySafety.DisableAfterFailure(capi, ex, "Could not apply terrain setting");
+        }
         return true;
     }
 
     private bool OnTransparentChanged(bool value)
     {
-        if (XRayRuntime.State != null) XRayRuntime.State.Config.IncludeTransparentBlocks = value;
-        SaveConfig();
-        XRayMeshPatch.Invalidate(capi);
+        try
+        {
+            if (XRayRuntime.State != null) XRayRuntime.State.Config.IncludeTransparentBlocks = value;
+            SaveConfig();
+            XRayMeshPatch.Invalidate(capi);
+        }
+        catch (Exception ex)
+        {
+            XRaySafety.DisableAfterFailure(capi, ex, "Could not apply transparent-block setting");
+        }
         return true;
     }
 
     private bool OnHudChanged(bool value)
     {
-        if (XRayRuntime.State != null) XRayRuntime.State.Config.ShowHud = value;
-        SaveConfig();
+        try
+        {
+            if (XRayRuntime.State != null) XRayRuntime.State.Config.ShowHud = value;
+            SaveConfig();
+        }
+        catch (Exception ex)
+        {
+            XRaySafety.Report(capi, ex, "Could not apply HUD setting");
+        }
         return true;
     }
 
     private bool OnReset()
     {
-        if (XRayRuntime.State != null)
+        try
         {
-            var defaults = XRayConfig.Default();
-            XRayRuntime.State.Config.Enabled = defaults.Enabled;
-            XRayRuntime.State.Config.WallAlpha = defaults.WallAlpha;
-            XRayRuntime.State.Config.Range = defaults.Range;
-            XRayRuntime.State.Config.IncludeTerrain = defaults.IncludeTerrain;
-            XRayRuntime.State.Config.IncludeTransparentBlocks = defaults.IncludeTransparentBlocks;
-            XRayRuntime.State.Config.ShowHud = defaults.ShowHud;
-        }
+            if (XRayRuntime.State != null)
+            {
+                var defaults = XRayConfig.Default();
+                XRayRuntime.State.Config.Enabled = defaults.Enabled;
+                XRayRuntime.State.Config.WallAlpha = defaults.WallAlpha;
+                XRayRuntime.State.Config.Range = defaults.Range;
+                XRayRuntime.State.Config.IncludeTerrain = defaults.IncludeTerrain;
+                XRayRuntime.State.Config.IncludeTransparentBlocks = defaults.IncludeTransparentBlocks;
+                XRayRuntime.State.Config.ShowHud = defaults.ShowHud;
+            }
 
-        SaveConfig();
-        RefreshControls();
-        XRayMeshPatch.Invalidate(capi);
+            SaveConfig();
+            RefreshControls();
+            XRayMeshPatch.Invalidate(capi);
+        }
+        catch (Exception ex)
+        {
+            XRaySafety.DisableAfterFailure(capi, ex, "Could not reset X-Ray settings");
+        }
         return true;
     }
 
@@ -148,13 +211,27 @@ public sealed class XRayMenuDialog : GuiDialog
         {
             capi.StoreModConfig(XRayRuntime.State.Config, "vsxray.json");
         }
-        catch
+        catch (Exception ex)
         {
-            // Do not let config I/O break the GUI.
+            XRaySafety.Report(capi, ex, "Could not save X-Ray configuration");
         }
     }
 
-    private void OnClose() => TryClose();
+    private void OnClose()
+    {
+        try
+        {
+            TryClose();
+        }
+        catch (Exception ex)
+        {
+            XRaySafety.Report(capi, ex, "Could not close X-Ray menu");
+        }
+    }
 
-    public override bool OnEscapePressed() => TryClose();
+    public override bool OnEscapePressed()
+    {
+        OnClose();
+        return true;
+    }
 }
