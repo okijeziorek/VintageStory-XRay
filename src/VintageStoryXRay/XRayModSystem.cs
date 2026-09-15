@@ -1,9 +1,7 @@
-using System.Text.Json;
 using HarmonyLib;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Input;
-using Vintagestory.API.Datastructures;
 
 namespace VintageStoryXRay;
 
@@ -35,7 +33,6 @@ public sealed class XRayModSystem : ModSystem
             GlKeys.F8,
             HotkeyType.CharacterControls
         );
-
         api.Input.SetHotKeyHandler("vintagestoryxray.toggle", _ =>
         {
             XRayRuntime.State!.Toggle(api);
@@ -52,24 +49,14 @@ public sealed class XRayModSystem : ModSystem
 
         menu = new XRayMenuDialog(api);
         api.Gui.RegisterDialog(menu);
-
         api.Input.SetHotKeyHandler("vintagestoryxray.menu", _ =>
         {
-            if (menu!.IsOpened())
-            {
-                menu.TryClose();
-            }
-            else
-            {
-                menu.TryOpen();
-            }
-
+            menu!.Toggle();
             return true;
         });
 
         harmony = new Harmony("okijeziorek.vintagestoryxray");
         XRayMeshPatch.Apply(harmony);
-
         SaveConfig(api);
     }
 
@@ -86,12 +73,8 @@ public sealed class XRayModSystem : ModSystem
             harmony = null;
         }
 
-        if (menu != null)
-        {
-            menu.TryClose();
-            menu = null;
-        }
-
+        menu?.TryClose();
+        menu = null;
         capi = null;
         XRayRuntime.State = null;
         base.Dispose();
@@ -101,13 +84,11 @@ public sealed class XRayModSystem : ModSystem
     {
         try
         {
-            var config = XRayRuntime.State?.Config ?? XRayConfig.Default();
-            string json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
-            api.StoreModConfig(JsonObject.FromJson(json), "vsxray.json");
+            api.StoreModConfig(XRayRuntime.State?.Config ?? XRayConfig.Default(), "vsxray.json");
         }
         catch
         {
-            // Configuration persistence is optional and must never prevent the mod from running.
+            // Configuration persistence must never prevent the client from loading the mod.
         }
     }
 }
