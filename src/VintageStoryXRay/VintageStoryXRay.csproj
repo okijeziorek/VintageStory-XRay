@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>VintageStoryXRay</AssemblyName>
+    <RootNamespace>VintageStoryXRay</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <VintageStoryPath Condition="'$(VSPath)' != ''">$(VSPath)</VintageStoryPath>
+    <VintageStoryPath Condition="'$(VintageStoryPath)' == '' and '$(VINTAGE_STORY)' != ''">$(VINTAGE_STORY)</VintageStoryPath>
+    <VintageStoryPath Condition="'$(VintageStoryPath)' == ''">$(HOME)/.local/share/Vintagestory</VintageStoryPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="VintagestoryAPI">
+      <HintPath>$(VintageStoryPath)/VintagestoryAPI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="VintagestoryLib">
+      <HintPath>$(VintageStoryPath)/VintagestoryLib.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(VintageStoryPath)/Lib/0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="CheckVintageStoryPath" BeforeTargets="ResolveReferences">
+    <Error Condition="!Exists('$(VintageStoryPath)/VintagestoryAPI.dll')" Text="Vintage Story API not found. Set VSPath or VINTAGE_STORY to the Vintage Story installation directory." />
+    <Error Condition="!Exists('$(VintageStoryPath)/Lib/0Harmony.dll')" Text="0Harmony.dll not found in Vintage Story Lib directory." />
+  </Target>
+
+  <Target Name="PackageMod" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+    <MakeDir Directories="$(MSBuildProjectDirectory)/../../dist" />
+    <ZipDirectory SourceDirectory="$(MSBuildProjectDirectory)/../../mod" DestinationFile="$(MSBuildProjectDirectory)/../../dist/VintageStoryXRay-$(Version).zip" Overwrite="true" />
+  </Target>
+</Project>

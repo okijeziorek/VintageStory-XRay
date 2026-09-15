@@ -1,0 +1,8 @@
+{
+  "Enabled": false,
+  "WallAlpha": 35,
+  "Range": 96,
+  "IncludeTerrain": true,
+  "IncludeTransparentBlocks": true,
+  "ShowHud": true
+}

@@ -1,0 +1,8 @@
+bin/
+obj/
+dist/
+.vscode/
+.idea/
+Directory.Build.local.props
+*.user
+*.suo
