@@ -8,14 +8,16 @@ using Vintagestory.API.MathTools;
 namespace VintageStoryXRay;
 
 /// <summary>
-/// Intercepts the concrete terrain mesh-pool AddMeshData methods rather than
-/// MeshData.AddMeshData. The latter modifies the destination buffer before the
-/// incoming block mesh is copied, so it cannot reliably affect the newly added
-/// terrain geometry.
+/// Changes terrain mesh data immediately before it is copied into a chunk mesh.
+/// A runtime-discovered TesselateBlock hook supplies the current Block so ores and
+/// explicit whitelist entries can remain opaque.
 /// </summary>
 internal static class XRayMeshPatch
 {
     private const int RenderPassMask = 0x03ff;
+
+    [ThreadStatic]
+    private static BlockContext? currentBlockContext;
 
     public static void Apply(Harmony harmony)
     {
@@ -30,6 +32,28 @@ internal static class XRayMeshPatch
                 {
                     try
                     {
+                        if (type.FullName?.Contains("TerrainChunkTesselator", StringComparison.Ordinal) == true)
+                        {
+                            foreach (var method in type.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+                            {
+                                if (method.Name != "TesselateBlock" || !seen.Add(method)) continue;
+
+                                try
+                                {
+                                    harmony.Patch(
+                                        method,
+                                        prefix: new HarmonyMethod(typeof(XRayMeshPatch), nameof(TesselateBlockPrefix)),
+                                        postfix: new HarmonyMethod(typeof(XRayMeshPatch), nameof(TesselateBlockPostfix))
+                                    );
+                                    patched++;
+                                }
+                                catch (Exception ex)
+                                {
+                                    XRaySafety.Report(null, ex, $"Could not patch {type.FullName}.{method.Name}");
+                                }
+                            }
+                        }
+
                         if (!typeof(ITerrainMeshPool).IsAssignableFrom(type) || type.IsInterface || type.IsAbstract)
                         {
                             continue;
@@ -59,19 +83,19 @@ internal static class XRayMeshPatch
                     }
                     catch (Exception ex)
                     {
-                        XRaySafety.Report(null, ex, $"Could not inspect terrain mesh pool type {type.FullName}");
+                        XRaySafety.Report(null, ex, $"Could not inspect terrain tessellation type {type.FullName}");
                     }
                 }
             }
 
             if (patched == 0)
             {
-                throw new InvalidOperationException("No concrete ITerrainMeshPool.AddMeshData method could be patched.");
+                throw new InvalidOperationException("No terrain tessellation method could be patched.");
             }
         }
         catch (Exception ex)
         {
-            throw new InvalidOperationException("Could not install terrain mesh pool patches", ex);
+            throw new InvalidOperationException("Could not install terrain tessellation patches", ex);
         }
     }
 
@@ -91,6 +115,82 @@ internal static class XRayMeshPatch
         }
     }
 
+    private static void TesselateBlockPrefix(object[] __args, ref BlockContext? __state)
+    {
+        __state = null;
+
+        try
+        {
+            if (XRayRuntime.State?.Enabled != true || !XRayRuntime.Config.ProcessTerrain)
+            {
+                return;
+            }
+
+            Block? block = null;
+            foreach (var arg in __args)
+            {
+                if (arg is Block candidate)
+                {
+                    block = candidate;
+                    break;
+                }
+            }
+
+            if (block == null) return;
+
+            __state = new BlockContext(currentBlockContext, ShouldKeepVisible(block));
+            currentBlockContext = __state;
+        }
+        catch (Exception ex)
+        {
+            __state = null;
+            XRaySafety.DisableAfterFailure(null, ex, "Could not classify terrain block; disabling X-Ray");
+        }
+    }
+
+    private static void TesselateBlockPostfix(BlockContext? __state)
+    {
+        if (__state == null) return;
+
+        try
+        {
+            currentBlockContext = __state.Previous;
+        }
+        catch (Exception ex)
+        {
+            currentBlockContext = null;
+            XRaySafety.DisableAfterFailure(null, ex, "Could not restore terrain block context; disabling X-Ray");
+        }
+    }
+
+    private static bool ShouldKeepVisible(Block block)
+    {
+        if (block.Code == null) return false;
+
+        string code = block.Code.ToString().ToLowerInvariant();
+        XRayConfig config = XRayRuntime.Config;
+
+        foreach (string? entry in config.VisibleBlockCodes ?? new List<string>())
+        {
+            if (!string.IsNullOrWhiteSpace(entry) && code.Contains(entry.Trim().ToLowerInvariant(), StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        if (!config.KeepOresVisible) return false;
+
+        foreach (string? pattern in config.OreCodePatterns ?? new List<string>())
+        {
+            if (!string.IsNullOrWhiteSpace(pattern) && code.Contains(pattern.Trim().ToLowerInvariant(), StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static void Prefix(object[] __args, ref PatchState? __state)
     {
         __state = null;
@@ -100,6 +200,9 @@ internal static class XRayMeshPatch
             if (XRayRuntime.State?.Enabled != true) return;
             if (!XRayRuntime.Config.ProcessTerrain) return;
             if (!LooksLikeTerrainTessellation()) return;
+
+            // An ore or explicit whitelist block is left completely untouched.
+            if (currentBlockContext?.KeepVisible == true) return;
 
             MeshData? mesh = null;
             foreach (var arg in __args)
@@ -129,9 +232,8 @@ internal static class XRayMeshPatch
                 mesh.Rgba[i] = alpha;
             }
 
-            int passLength = mesh.RenderPassesAndExtraBits.Length;
             int transparent = (int)EnumChunkRenderPass.Transparent;
-            for (int i = 0; i < passLength; i++)
+            for (int i = 0; i < mesh.RenderPassesAndExtraBits.Length; i++)
             {
                 mesh.RenderPassesAndExtraBits[i] = (short)(
                     (mesh.RenderPassesAndExtraBits[i] & ~RenderPassMask) | transparent
@@ -212,6 +314,8 @@ internal static class XRayMeshPatch
             XRaySafety.Report(api, ex, "Could not invalidate terrain after X-Ray setting change");
         }
     }
+
+    private sealed record BlockContext(BlockContext? Previous, bool KeepVisible);
 
     private sealed record PatchState(
         MeshData Mesh,
