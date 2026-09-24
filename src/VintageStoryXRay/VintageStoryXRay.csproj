@@ -7,6 +7,7 @@
     <RootNamespace>VintageStoryXRay</RootNamespace>
     <LangVersion>latest</LangVersion>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <Version>0.1.0-dev</Version>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -32,11 +33,20 @@
 
   <Target Name="CheckVintageStoryPath" BeforeTargets="ResolveReferences">
     <Error Condition="!Exists('$(VintageStoryPath)/VintagestoryAPI.dll')" Text="Vintage Story API not found. Set VSPath or VINTAGE_STORY to the Vintage Story installation directory." />
+    <Error Condition="!Exists('$(VintageStoryPath)/VintagestoryLib.dll')" Text="Vintage Story game library not found. Set VSPath or VINTAGE_STORY to the Vintage Story installation directory." />
     <Error Condition="!Exists('$(VintageStoryPath)/Lib/0Harmony.dll')" Text="0Harmony.dll not found in Vintage Story Lib directory." />
   </Target>
 
   <Target Name="PackageMod" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+    <PropertyGroup>
+      <PackageDir>$(BaseIntermediateOutputPath)modpackage</PackageDir>
+      <PackageFile>$(MSBuildProjectDirectory)/../../dist/VintageStoryXRay-$(Version).zip</PackageFile>
+    </PropertyGroup>
+    <RemoveDir Directories="$(PackageDir)" />
+    <MakeDir Directories="$(PackageDir)" />
     <MakeDir Directories="$(MSBuildProjectDirectory)/../../dist" />
-    <ZipDirectory SourceDirectory="$(MSBuildProjectDirectory)/../../mod" DestinationFile="$(MSBuildProjectDirectory)/../../dist/VintageStoryXRay-$(Version).zip" Overwrite="true" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(PackageDir)" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)/../../modinfo.json" DestinationFolder="$(PackageDir)" />
+    <ZipDirectory SourceDirectory="$(PackageDir)" DestinationFile="$(PackageFile)" Overwrite="true" />
   </Target>
 </Project>

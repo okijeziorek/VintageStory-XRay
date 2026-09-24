@@ -1,9 +1,7 @@
-using System.Text.Json;
 using HarmonyLib;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Input;
-using Vintagestory.API.Datastructures;
 
 namespace VintageStoryXRay;
 
@@ -17,97 +15,179 @@ public sealed class XRayModSystem : ModSystem
     {
         capi = api;
 
-        XRayConfig config;
         try
         {
-            config = api.LoadModConfig<XRayConfig>("vsxray.json") ?? XRayConfig.Default();
-        }
-        catch
-        {
-            config = XRayConfig.Default();
-        }
+            XRayConfig config;
+            try
+            {
+                config = api.LoadModConfig<XRayConfig>("vsxray.json") ?? XRayConfig.Default();
+            }
+            catch (Exception ex)
+            {
+                XRaySafety.Report(api, ex, "Could not load configuration; using defaults");
+                config = XRayConfig.Default();
+            }
 
-        XRayRuntime.State = new XRayState(config);
+            XRayRuntime.State = new XRayState(config);
 
-        api.Input.RegisterHotKey(
-            "vintagestoryxray.toggle",
-            "Toggle X-Ray",
-            GlKeys.F8,
-            HotkeyType.CharacterControls
-        );
+            RegisterHotkeys(api);
+            CreateMenu(api);
 
-        api.Input.SetHotKeyHandler("vintagestoryxray.toggle", _ =>
-        {
-            XRayRuntime.State!.Toggle(api);
+            try
+            {
+                harmony = new Harmony("okijeziorek.vintagestoryxray");
+                XRayMeshPatch.Apply(harmony);
+            }
+            catch (Exception ex)
+            {
+                XRaySafety.DisableAfterFailure(api, ex, "Could not install rendering patches; X-Ray was disabled");
+                harmony = null;
+            }
+
             SaveConfig(api);
-            return true;
-        });
-
-        api.Input.RegisterHotKey(
-            "vintagestoryxray.menu",
-            "X-Ray Menu",
-            GlKeys.F11,
-            HotkeyType.GUIOrOtherControls
-        );
-
-        menu = new XRayMenuDialog(api);
-        api.Gui.RegisterDialog(menu);
-
-        api.Input.SetHotKeyHandler("vintagestoryxray.menu", _ =>
+        }
+        catch (Exception ex)
         {
-            if (menu!.IsOpened())
+            // A mod initialization failure must not propagate into the game client.
+            XRaySafety.DisableAfterFailure(api, ex, "Fatal mod initialization error; disabling X-Ray");
+            SafeDisposeMenu();
+            SafeUnpatch();
+        }
+    }
+
+    private void RegisterHotkeys(ICoreClientAPI api)
+    {
+        try
+        {
+            api.Input.RegisterHotKey(
+                "vintagestoryxray.toggle",
+                "Toggle X-Ray",
+                GlKeys.F8,
+                HotkeyType.CharacterControls
+            );
+            api.Input.SetHotKeyHandler("vintagestoryxray.toggle", _ =>
             {
-                menu.TryClose();
-            }
-            else
+                try
+                {
+                    if (XRayRuntime.State == null) return true;
+                    XRayRuntime.State.Toggle(api);
+                    SaveConfig(api);
+                }
+                catch (Exception ex)
+                {
+                    XRaySafety.DisableAfterFailure(api, ex, "F8 toggle failed");
+                }
+
+                return true;
+            });
+
+            api.Input.RegisterHotKey(
+                "vintagestoryxray.menu",
+                "X-Ray Menu",
+                GlKeys.F11,
+                HotkeyType.GUIOrOtherControls
+            );
+
+            api.Input.SetHotKeyHandler("vintagestoryxray.menu", _ =>
             {
-                menu.TryOpen();
-            }
+                try
+                {
+                    menu?.Toggle();
+                }
+                catch (Exception ex)
+                {
+                    XRaySafety.Report(api, ex, "F11 menu toggle failed");
+                }
 
-            return true;
-        });
+                return true;
+            });
+        }
+        catch (Exception ex)
+        {
+            XRaySafety.Report(api, ex, "Could not register X-Ray hotkeys");
+        }
+    }
 
-        harmony = new Harmony("okijeziorek.vintagestoryxray");
-        XRayMeshPatch.Apply(harmony);
-
-        SaveConfig(api);
+    private void CreateMenu(ICoreClientAPI api)
+    {
+        try
+        {
+            menu = new XRayMenuDialog(api);
+            api.Gui.RegisterDialog(menu);
+        }
+        catch (Exception ex)
+        {
+            menu = null;
+            XRaySafety.Report(api, ex, "Could not create X-Ray menu");
+        }
     }
 
     public override void Dispose()
     {
-        if (capi != null && XRayRuntime.State != null)
+        try
         {
-            SaveConfig(capi);
+            if (capi != null && XRayRuntime.State != null)
+            {
+                SaveConfig(capi);
+            }
+        }
+        catch (Exception ex)
+        {
+            XRaySafety.Report(capi, ex, "Could not save configuration during shutdown");
         }
 
-        if (harmony != null)
-        {
-            harmony.UnpatchAll(harmony.Id);
-            harmony = null;
-        }
-
-        if (menu != null)
-        {
-            menu.TryClose();
-            menu = null;
-        }
-
+        SafeUnpatch();
+        SafeDisposeMenu();
         capi = null;
         XRayRuntime.State = null;
         base.Dispose();
+    }
+
+    private void SafeUnpatch()
+    {
+        if (harmony == null) return;
+
+        try
+        {
+            harmony.UnpatchAll(harmony.Id);
+        }
+        catch (Exception ex)
+        {
+            XRaySafety.Report(capi, ex, "Could not remove Harmony patches");
+        }
+        finally
+        {
+            harmony = null;
+        }
+    }
+
+    private void SafeDisposeMenu()
+    {
+        if (menu == null) return;
+
+        try
+        {
+            menu.TryClose();
+        }
+        catch (Exception ex)
+        {
+            XRaySafety.Report(capi, ex, "Could not close X-Ray menu");
+        }
+        finally
+        {
+            menu = null;
+        }
     }
 
     private static void SaveConfig(ICoreClientAPI api)
     {
         try
         {
-            var config = XRayRuntime.State?.Config ?? XRayConfig.Default();
-            string json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
-            api.StoreModConfig(JsonObject.FromJson(json), "vsxray.json");
+            api.StoreModConfig(XRayRuntime.State?.Config ?? XRayConfig.Default(), "vsxray.json");
         }
-        catch
+        catch (Exception ex)
         {
-            // Configuration persistence is optional and must never prevent the mod from running.
+            XRaySafety.Report(api, ex, "Could not persist configuration");
         }
     }
 }
