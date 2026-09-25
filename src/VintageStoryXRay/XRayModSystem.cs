@@ -1,7 +1,6 @@
 using HarmonyLib;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
-using Vintagestory.API.Input;
 
 namespace VintageStoryXRay;
 
@@ -9,6 +8,8 @@ public sealed class XRayModSystem : ModSystem
 {
     private Harmony? harmony;
     private XRayMenuDialog? menu;
+    private ClientFlightController? flight;
+    private long? flightTickListenerId;
     private ICoreClientAPI? capi;
 
     public override void StartClientSide(ICoreClientAPI api)
@@ -29,6 +30,9 @@ public sealed class XRayModSystem : ModSystem
             }
 
             XRayRuntime.State = new XRayState(config);
+            flight = new ClientFlightController(api);
+            XRayRuntime.Flight = flight;
+            flightTickListenerId = api.Event.RegisterGameTickListener(flight.OnGameTick, 20);
 
             RegisterHotkeys(api);
             CreateMenu(api);
@@ -90,13 +94,50 @@ public sealed class XRayModSystem : ModSystem
 
             api.Input.SetHotKeyHandler("vintagestoryxray.menu", _ =>
             {
+                ToggleMenu(api, "F11");
+                return true;
+            });
+
+            api.Input.RegisterHotKey(
+                "vintagestoryxray.menu.alt",
+                "Toggle X-Ray ClickGUI",
+                GlKeys.RShift,
+                HotkeyType.GUIOrOtherControls
+            );
+            api.Input.SetHotKeyHandler("vintagestoryxray.menu.alt", _ =>
+            {
+                ToggleMenu(api, "Right Shift");
+                return true;
+            });
+
+            api.ChatCommands
+                .Create("xraymenu")
+                .WithDescription("Open or close the X-Ray ClickGUI.")
+                .HandleWith(_ =>
+                {
+                    ToggleMenu(api, "/xraymenu");
+                    return TextCommandResult.Success("X-Ray ClickGUI command handled.", null);
+                });
+
+            api.Input.RegisterHotKey(
+                "vintagestoryxray.flight",
+                "Toggle client flight",
+                GlKeys.F7,
+                HotkeyType.CharacterControls
+            );
+            api.Input.SetHotKeyHandler("vintagestoryxray.flight", _ =>
+            {
                 try
                 {
-                    menu?.Toggle();
+                    if (XRayRuntime.State == null) return true;
+                    bool enabled = !XRayRuntime.State.Config.ClientFlightEnabled;
+                    XRayRuntime.State.Config.ClientFlightEnabled = enabled;
+                    flight?.SetEnabled(enabled);
+                    SaveConfig(api);
                 }
                 catch (Exception ex)
                 {
-                    XRaySafety.Report(api, ex, "F11 menu toggle failed");
+                    XRaySafety.Report(api, ex, "Could not toggle client flight");
                 }
 
                 return true;
@@ -105,6 +146,29 @@ public sealed class XRayModSystem : ModSystem
         catch (Exception ex)
         {
             XRaySafety.Report(api, ex, "Could not register X-Ray hotkeys");
+        }
+    }
+
+    private void ToggleMenu(ICoreClientAPI api, string keyName)
+    {
+        try
+        {
+            if (menu == null)
+            {
+                api.ShowChatMessage("X-Ray settings did not initialize. Check the client log for the XRay mod error.");
+            }
+            else if (menu.IsOpened())
+            {
+                menu.TryClose();
+            }
+            else if (!menu.TryOpen())
+            {
+                api.ShowChatMessage($"Vintage Story could not open the X-Ray settings dialog ({keyName}).");
+            }
+        }
+        catch (Exception ex)
+        {
+            XRaySafety.Report(api, ex, $"{keyName} menu toggle failed");
         }
     }
 
@@ -137,6 +201,14 @@ public sealed class XRayModSystem : ModSystem
         }
 
         SafeUnpatch();
+        if (flightTickListenerId.HasValue && capi != null)
+        {
+            try { capi.Event.UnregisterGameTickListener(flightTickListenerId.Value); }
+            catch (Exception ex) { XRaySafety.Report(capi, ex, "Could not unregister client flight listener"); }
+        }
+        flight?.Dispose();
+        flight = null;
+        XRayRuntime.Flight = null;
         SafeDisposeMenu();
         capi = null;
         XRayRuntime.State = null;

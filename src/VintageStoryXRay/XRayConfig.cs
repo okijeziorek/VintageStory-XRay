@@ -8,6 +8,7 @@ public sealed class XRayConfig
     public bool IncludeTerrain { get; set; } = true;
     public bool IncludeTransparentBlocks { get; set; } = true;
     public bool ShowHud { get; set; } = true;
+    public bool ClientFlightEnabled { get; set; }
 
     /// <summary>Keep blocks classified as ores fully visible while surrounding terrain is faded.</summary>
     public bool KeepOresVisible { get; set; } = true;

@@ -4,7 +4,7 @@ Client-side X-Ray rendering project for **Vintage Story 1.22.3**.
 
 ## Current state
 
-The repository contains a .NET 10 client-only mod, persistent configuration, an F8 toggle and an experimental Harmony patch around `MeshData.AddMeshData(...)`.
+The repository contains a .NET 10 client-only mod with X-Ray rendering and local client controls.
 
 The current prototype changes terrain mesh alpha and routes the intercepted terrain mesh data toward the transparent chunk render pass. This is the first real rendering implementation, but it is **not yet verified against a locally executed 1.22.3 client**.
 
@@ -13,22 +13,34 @@ The patch is deliberately restricted to call stacks containing `TerrainChunkTess
 ## What works in the prototype
 
 - client-only mod loading
-- F8 X-Ray toggle
+- F8 X-Ray toggle and F11 settings dialog
+- F7 client-flight toggle (local player controls only)
 - persistent `ModConfig/vsxray.json`
 - configurable wall alpha
 - configurable redraw range
+- ore visibility patterns and custom visible block-code fragments in JSON config
 - chunk redraw on toggle
 - experimental transparent terrain rendering path
 
 ## Still to implement
 
-- true target/ore whitelist at block-tessellation level
 - opaque ore ESP / outlines
 - hidden terrain mode
 - cave/air-space detection
 - mob/entity visibility modes
 - performance-optimized chunk invalidation
 - automated 1.22.3 integration test
+
+`KeepOresVisible`, `OreCodePatterns`, and `VisibleBlockCodes` are implemented as block-code filters during terrain tessellation. The `IncludeTransparentBlocks` setting is stored and shown in the GUI, but the current mesh patch does not yet use it to filter render passes. The patch has been compiled against the installed 1.22.3 assemblies; it has not been exercised in a live game session.
+
+Client flight sets `EntityControls.IsFlying` and `EntityControls.NoClip` from a client game-tick listener. Multiplayer servers remain authoritative and can reject movement; a client-only mod cannot grant server flight permissions.
+
+## Manual test
+
+1. Run `Build-Windows.ps1`; it builds the mod and installs the ZIP under `%APPDATA%\VintagestoryData\Mods`.
+2. Start Vintage Story and confirm **VintageStory X-Ray** is enabled in the client mod list.
+3. Press **F11** to open settings. Press **F8** to toggle X-Ray and **F7** to toggle client flight.
+4. Verify the controls in single-player. In multiplayer, the server may reject client-side flight.
 
 ## Compatibility
 
@@ -54,6 +66,18 @@ The project expects:
 - `Lib/0Harmony.dll`
 
 The game DLLs are intentionally **not** stored in this repository.
+
+### Windows Builder
+
+Run `Build-Windows.ps1` from PowerShell. It searches common Vintage Story install folders, validates the API, game library, and Harmony DLL, then prompts for the install folder if it cannot find them. It runs restore and a Release build, creates the mod ZIP under `dist`, and copies that ZIP into `%APPDATA%\VintagestoryData\Mods`.
+
+Requires the .NET 10 SDK. To choose a game folder directly, run:
+
+```powershell
+.\Build-Windows.ps1 -VintageStoryPath 'C:\Path\To\Vintage Story'
+```
+
+To build without installing the ZIP, add `-SkipInstall`.
 
 ## Configuration
 

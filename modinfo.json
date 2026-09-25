@@ -3,7 +3,7 @@
   "modid": "vsxray",
   "name": "VintageStory X-Ray",
   "authors": ["okijeziorek"],
-  "description": "Client-side configurable X-Ray rendering research mod for Vintage Story 1.22.3.",
+  "description": "Client-side configurable X-Ray rendering mod for Vintage Story 1.22.3.",
   "version": "0.1.0-dev",
   "side": "Client",
   "requiredOnClient": true,

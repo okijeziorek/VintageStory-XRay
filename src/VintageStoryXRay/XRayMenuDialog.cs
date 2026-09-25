@@ -5,11 +5,14 @@ namespace VintageStoryXRay;
 /// <summary>Client-side X-Ray configuration window.</summary>
 public sealed class XRayMenuDialog : GuiDialog
 {
-    private readonly ICoreClientAPI capi;
+    private enum MenuCategory { Render, Movement, Interface }
+
+    private readonly ICoreClientAPI clientApi;
+    private MenuCategory selectedCategory;
 
     public XRayMenuDialog(ICoreClientAPI capi) : base(capi)
     {
-        this.capi = capi;
+        clientApi = capi;
         try
         {
             Compose();
@@ -28,44 +31,69 @@ public sealed class XRayMenuDialog : GuiDialog
         var bgBounds = ElementBounds.Fill.WithFixedPadding(12);
         bgBounds.BothSizing = ElementSizing.FitToChildren;
 
-        var composer = capi.Gui.CreateCompo("vintagestoryxray.menu", bounds)
+        var composer = clientApi.Gui.CreateCompo("vintagestoryxray.menu", bounds)
             .AddShadedDialogBG(bgBounds)
-            .AddDialogTitleBar("Vintage Story X-Ray", OnClose)
+            .AddDialogTitleBar("VSX ClickGUI", () => OnClose())
             .BeginChildElements(bgBounds.FlatCopy().FixedGrow(0, -10));
+
+        composer
+            .AddButton("Render", () => OnCategoryClick(MenuCategory.Render), ElementBounds.Fixed(0, 0, 125, 34))
+            .AddButton("Movement", () => OnCategoryClick(MenuCategory.Movement), ElementBounds.Fixed(135, 0, 125, 34))
+            .AddButton("Interface", () => OnCategoryClick(MenuCategory.Interface), ElementBounds.Fixed(270, 0, 125, 34));
 
         var state = XRayRuntime.State;
         if (state == null)
         {
-            composer.AddStaticText("X-Ray runtime is not initialized.", CairoFont.WhiteSmallText(), ElementBounds.Fixed(0, 0, 400, 30));
+            composer.AddStaticText("Client modules did not initialize.", CairoFont.WhiteSmallText(), ElementBounds.Fixed(0, 45, 400, 30));
+        }
+        else if (selectedCategory == MenuCategory.Render)
+        {
+            composer.AddStaticText("RENDER MODULES", CairoFont.WhiteSmallText(), ElementBounds.Fixed(0, 45, 400, 25));
+            composer.AddSwitch(OnEnabledChanged, ElementBounds.Fixed(0, 75, 30, 30), "xray-enabled");
+            composer.AddStaticText("X-Ray  [F8]", CairoFont.WhiteSmallText(), ElementBounds.Fixed(45, 75, 250, 30));
+
+            composer.AddStaticText("Wall alpha", CairoFont.WhiteSmallText(), ElementBounds.Fixed(0, 115, 180, 25));
+            composer.AddSlider(OnAlphaChanged, ElementBounds.Fixed(0, 145, 400, 30), "xray-alpha");
+
+            composer.AddStaticText("Range", CairoFont.WhiteSmallText(), ElementBounds.Fixed(0, 180, 180, 25));
+            composer.AddSlider(OnRangeChanged, ElementBounds.Fixed(0, 210, 400, 30), "xray-range");
+
+            composer.AddSwitch(OnTerrainChanged, ElementBounds.Fixed(0, 250, 30, 30), "xray-terrain");
+            composer.AddStaticText("Process terrain", CairoFont.WhiteSmallText(), ElementBounds.Fixed(45, 250, 250, 30));
+
+            composer.AddSwitch(OnTransparentChanged, ElementBounds.Fixed(0, 290, 30, 30), "xray-transparent");
+            composer.AddStaticText("Process transparent blocks", CairoFont.WhiteSmallText(), ElementBounds.Fixed(45, 290, 300, 30));
+        }
+        else if (selectedCategory == MenuCategory.Movement)
+        {
+            composer.AddStaticText("MOVEMENT MODULES", CairoFont.WhiteSmallText(), ElementBounds.Fixed(0, 45, 400, 25));
+            composer.AddSwitch(OnFlightChanged, ElementBounds.Fixed(0, 75, 30, 30), "xray-flight");
+            composer.AddStaticText("Client flight  [F7]", CairoFont.WhiteSmallText(), ElementBounds.Fixed(45, 75, 300, 30));
+            composer.AddStaticText("Single-player works locally. A multiplayer server can reject flight.", CairoFont.WhiteSmallText(), ElementBounds.Fixed(0, 115, 490, 45));
         }
         else
         {
-            composer.AddStaticText("General", CairoFont.WhiteSmallText(), ElementBounds.Fixed(0, 0, 400, 25));
-            composer.AddSwitch(OnEnabledChanged, ElementBounds.Fixed(0, 30, 30, 30), "xray-enabled");
-            composer.AddStaticText("X-Ray enabled", CairoFont.WhiteSmallText(), ElementBounds.Fixed(45, 30, 250, 30));
+            composer.AddStaticText("INTERFACE MODULES", CairoFont.WhiteSmallText(), ElementBounds.Fixed(0, 45, 400, 25));
 
-            composer.AddStaticText("Wall transparency", CairoFont.WhiteSmallText(), ElementBounds.Fixed(0, 70, 180, 25));
-            composer.AddSlider(OnAlphaChanged, ElementBounds.Fixed(0, 100, 400, 30), "xray-alpha");
-
-            composer.AddStaticText("Range", CairoFont.WhiteSmallText(), ElementBounds.Fixed(0, 140, 180, 25));
-            composer.AddSlider(OnRangeChanged, ElementBounds.Fixed(0, 170, 400, 30), "xray-range");
-
-            composer.AddSwitch(OnTerrainChanged, ElementBounds.Fixed(0, 210, 30, 30), "xray-terrain");
-            composer.AddStaticText("Process terrain", CairoFont.WhiteSmallText(), ElementBounds.Fixed(45, 210, 250, 30));
-
-            composer.AddSwitch(OnTransparentChanged, ElementBounds.Fixed(0, 250, 30, 30), "xray-transparent");
-            composer.AddStaticText("Process transparent blocks", CairoFont.WhiteSmallText(), ElementBounds.Fixed(45, 250, 300, 30));
-
-            composer.AddSwitch(OnHudChanged, ElementBounds.Fixed(0, 290, 30, 30), "xray-hud");
-            composer.AddStaticText("Show HUD status", CairoFont.WhiteSmallText(), ElementBounds.Fixed(45, 290, 250, 30));
-
-            composer.AddButton("Reset defaults", OnReset, ElementBounds.Fixed(0, 335, 190, 40));
-            composer.AddButton("Close", OnClose, ElementBounds.Fixed(210, 335, 190, 40));
+            composer.AddSwitch(OnHudChanged, ElementBounds.Fixed(0, 75, 30, 30), "xray-hud");
+            composer.AddStaticText("HUD status", CairoFont.WhiteSmallText(), ElementBounds.Fixed(45, 75, 250, 30));
         }
+
+        composer.AddButton("Reset defaults", OnReset, ElementBounds.Fixed(0, 355, 190, 40));
+        composer.AddButton("Close", OnClose, ElementBounds.Fixed(210, 355, 190, 40));
 
         composer.EndChildElements();
         SingleComposer = composer.Compose();
         RefreshControls();
+    }
+
+    private bool OnCategoryClick(MenuCategory category)
+    {
+        if (selectedCategory == category) return true;
+        selectedCategory = category;
+        ClearComposers();
+        Compose();
+        return true;
     }
 
     private void RefreshControls()
@@ -82,26 +110,26 @@ public sealed class XRayMenuDialog : GuiDialog
             SingleComposer.GetSwitch("xray-terrain")?.SetValue(cfg.IncludeTerrain);
             SingleComposer.GetSwitch("xray-transparent")?.SetValue(cfg.IncludeTransparentBlocks);
             SingleComposer.GetSwitch("xray-hud")?.SetValue(cfg.ShowHud);
+            SingleComposer.GetSwitch("xray-flight")?.SetValue(cfg.ClientFlightEnabled);
         }
         catch (Exception ex)
         {
-            XRaySafety.Report(capi, ex, "Could not refresh X-Ray menu controls");
+            XRaySafety.Report(clientApi, ex, "Could not refresh X-Ray menu controls");
         }
     }
 
-    private bool OnEnabledChanged(bool value)
+    private void OnEnabledChanged(bool value)
     {
         try
         {
             if (XRayRuntime.State != null) XRayRuntime.State.Config.Enabled = value;
             SaveConfig();
-            XRayMeshPatch.Invalidate(capi);
+            XRayMeshPatch.Invalidate(clientApi);
         }
         catch (Exception ex)
         {
-            XRaySafety.DisableAfterFailure(capi, ex, "Could not apply X-Ray enabled setting");
+            XRaySafety.DisableAfterFailure(clientApi, ex, "Could not apply X-Ray enabled setting");
         }
-        return true;
     }
 
     private bool OnAlphaChanged(int value)
@@ -134,37 +162,35 @@ public sealed class XRayMenuDialog : GuiDialog
         return true;
     }
 
-    private bool OnTerrainChanged(bool value)
+    private void OnTerrainChanged(bool value)
     {
         try
         {
             if (XRayRuntime.State != null) XRayRuntime.State.Config.IncludeTerrain = value;
             SaveConfig();
-            XRayMeshPatch.Invalidate(capi);
+            XRayMeshPatch.Invalidate(clientApi);
         }
         catch (Exception ex)
         {
-            XRaySafety.DisableAfterFailure(capi, ex, "Could not apply terrain setting");
+            XRaySafety.DisableAfterFailure(clientApi, ex, "Could not apply terrain setting");
         }
-        return true;
     }
 
-    private bool OnTransparentChanged(bool value)
+    private void OnTransparentChanged(bool value)
     {
         try
         {
             if (XRayRuntime.State != null) XRayRuntime.State.Config.IncludeTransparentBlocks = value;
             SaveConfig();
-            XRayMeshPatch.Invalidate(capi);
+            XRayMeshPatch.Invalidate(clientApi);
         }
         catch (Exception ex)
         {
-            XRaySafety.DisableAfterFailure(capi, ex, "Could not apply transparent-block setting");
+            XRaySafety.DisableAfterFailure(clientApi, ex, "Could not apply transparent-block setting");
         }
-        return true;
     }
 
-    private bool OnHudChanged(bool value)
+    private void OnHudChanged(bool value)
     {
         try
         {
@@ -173,9 +199,22 @@ public sealed class XRayMenuDialog : GuiDialog
         }
         catch (Exception ex)
         {
-            XRaySafety.Report(capi, ex, "Could not apply HUD setting");
+            XRaySafety.Report(clientApi, ex, "Could not apply HUD setting");
         }
-        return true;
+    }
+
+    private void OnFlightChanged(bool value)
+    {
+        try
+        {
+            if (XRayRuntime.State != null) XRayRuntime.State.Config.ClientFlightEnabled = value;
+            XRayRuntime.Flight?.SetEnabled(value);
+            SaveConfig();
+        }
+        catch (Exception ex)
+        {
+            XRaySafety.Report(clientApi, ex, "Could not change client flight setting");
+        }
     }
 
     private bool OnReset()
@@ -191,15 +230,17 @@ public sealed class XRayMenuDialog : GuiDialog
                 XRayRuntime.State.Config.IncludeTerrain = defaults.IncludeTerrain;
                 XRayRuntime.State.Config.IncludeTransparentBlocks = defaults.IncludeTransparentBlocks;
                 XRayRuntime.State.Config.ShowHud = defaults.ShowHud;
+                XRayRuntime.State.Config.ClientFlightEnabled = defaults.ClientFlightEnabled;
             }
 
+            XRayRuntime.Flight?.SetEnabled(false);
             SaveConfig();
             RefreshControls();
-            XRayMeshPatch.Invalidate(capi);
+            XRayMeshPatch.Invalidate(clientApi);
         }
         catch (Exception ex)
         {
-            XRaySafety.DisableAfterFailure(capi, ex, "Could not reset X-Ray settings");
+            XRaySafety.DisableAfterFailure(clientApi, ex, "Could not reset X-Ray settings");
         }
         return true;
     }
@@ -209,15 +250,15 @@ public sealed class XRayMenuDialog : GuiDialog
         if (XRayRuntime.State == null) return;
         try
         {
-            capi.StoreModConfig(XRayRuntime.State.Config, "vsxray.json");
+            clientApi.StoreModConfig(XRayRuntime.State.Config, "vsxray.json");
         }
         catch (Exception ex)
         {
-            XRaySafety.Report(capi, ex, "Could not save X-Ray configuration");
+            XRaySafety.Report(clientApi, ex, "Could not save X-Ray configuration");
         }
     }
 
-    private void OnClose()
+    private bool OnClose()
     {
         try
         {
@@ -225,8 +266,9 @@ public sealed class XRayMenuDialog : GuiDialog
         }
         catch (Exception ex)
         {
-            XRaySafety.Report(capi, ex, "Could not close X-Ray menu");
+            XRaySafety.Report(clientApi, ex, "Could not close X-Ray menu");
         }
+        return true;
     }
 
     public override bool OnEscapePressed()

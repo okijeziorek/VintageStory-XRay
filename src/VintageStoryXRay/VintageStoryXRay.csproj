@@ -6,6 +6,7 @@
     <AssemblyName>VintageStoryXRay</AssemblyName>
     <RootNamespace>VintageStoryXRay</RootNamespace>
     <LangVersion>latest</LangVersion>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
     <Version>0.1.0-dev</Version>
   </PropertyGroup>
